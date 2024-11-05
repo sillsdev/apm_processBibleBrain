@@ -1,3 +1,6 @@
-# transcriber_sqs_trigger
-deploy:serverless deploy --verbose -s dev
+# apm_processBibleBrain
+Process messages from SQS queue and create resources from bible brain audio files
+
+deploy:
+serverless deploy --verbose -s dev
 
