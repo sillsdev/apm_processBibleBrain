@@ -68,14 +68,13 @@ export async function handler(event, context) {
     params.append('key', Key);
     let uri = `${Domain}${path}?${params}`;
     try {
-    var response = await fetch(uri);
+    var response = await fetchIt(uri);
     if (response.ok) {
       return await response.json();
     }
-    else console.log(`${uri} response error ${response.statusText}`);
     } catch (e)
     {
-      console.log("fetch error", e);
+      console.log("fetch error", uri, e);
     }
   }
 
@@ -103,14 +102,29 @@ export async function handler(event, context) {
       body: JSON.stringify(data)
     };
     let uri = `https://${host}${stagepath}/api/sectionresources`;
-     var response = await fetch(uri, params);
+     var response = await fetchIt(uri, params);
     if (response.ok) {
       var rec = await response.json();
       console.log('post', uri, rec.data.id);
       return rec.data;
     }
-    else console.log(`${uri} response error ${response.statusText}`);
     return undefined;
+  }
+  async function fetchIt(uri, params) {
+    //console.log('fetch', uri, params);
+    try {
+      var response = await fetch(uri, params);
+      //console.log(response.ok, response.statusText);
+      return response;
+    } catch (err) {
+      console.log("error on fetch", err.message, err);
+      
+      var response= new Response(JSON.stringify({ message: uri }), {
+        status: 500,
+        statusText: err.message,
+        });
+      return response;
+    }
   }
   async function createMedia(originalFile, contentType, duration, desc, passageId, planId,
     artifacttypeId, lang, s3file, folder, artifactcategoryId, sourceMediaId, segments) {
@@ -125,7 +139,6 @@ export async function handler(event, context) {
               "topic": desc,
               "content-type":contentType,
               "eaf-url":"Audio Attached",
-              "date-created":"2024-10-25T01:39:47.918Z",
               "performed-by":"",
               "duration": duration,
               "publish-to":"{}",
@@ -152,15 +165,16 @@ export async function handler(event, context) {
         },
         body: JSON.stringify(data)
       };
+      
       let uri = `https://${host}${stagepath}/api/mediafiles`;
-      var response = await fetch(uri, params);
+      var response = await fetchIt(uri, params);
       if (response.ok) {
         var rec = await response.json();
-        console.log('post', uri, rec.data.id);
         return rec.data;
       }
       else 
         console.log(`${uri} response error ${response.status}`);
+    
       return undefined;
   }
   function ContentType(codec, path)
@@ -178,17 +192,18 @@ export async function handler(event, context) {
       // Extract the file name from the URL
       const fileName = url.split('?')[0].split('/').pop();
       const key = `${Folder}/${fileName}`;
-      console.log('UrlToS3 ', key, await fileExists(key));
+      //console.log('enter UrlToS3 ', key, await fileExists(key));
       if (!(await fileExists(key)))
       {
         //fetch the file
-        const response = await fetch(url);
+        var response = await fetchIt(url);
         if (!response.ok) 
           throw new Error(`Failed to fetch file: ${response.statusText}`);
         const buffer = await response.arrayBuffer(); // Convert response to ArrayBuffer
         response = await putFile(key, contenttype, Buffer.from(buffer));
+        //console.log('exit UrlToS3 ', key, await fileExists(key));
         if (response) return fileName;
-        return undefined;
+        throw new Error($`Unable to copy file to s3 ${key} ${url}`);
       } else { 
         //console.log('file exists on s3'); 
         return fileName;
@@ -205,17 +220,16 @@ export async function handler(event, context) {
       var uri = `https://${host}${stagepath}/api/mediafiles/fromfile/${plan}/${encodeURI(filename)}`;
       if (segments) uri += `/${encodeURI(segments)}`;
       try {
-        var response = await fetch(uri, params);
+        var response = await fetchIt(uri, params);
         if (response.ok) {
           var data = await response.json();
-          console.log(uri, data.data.id);
           return data.data;
-        } else console.log(`${uri} response error ${response.statusText}`);
+        };
       } catch (err)
       {
         console.log(err);
       }
-        return undefined;     
+      return undefined;     
   }
   
   async function BibleBrainInfo(info)
@@ -251,7 +265,6 @@ export async function handler(event, context) {
     var bb = await BibleBrainInfo(info);
     var generalresource = await getMedia(info.PlanId, bb.s3File);
     if (!generalresource) throw new Error(`No General Resource for: ${bb.s3File}`);
-    console.log('generalresource', generalresource.id);
     //get timing file for this fileset
     var fs = await BibleBrainApi(`timestamps/${info.FilesetId}/${info.Book}/${info.Chapter}`, undefined);
     if (fs)
